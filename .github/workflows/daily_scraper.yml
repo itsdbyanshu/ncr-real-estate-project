@@ -1,0 +1,35 @@
+name: Daily NCR Real Estate Scraper
+
+on:
+  schedule:
+    # Runs automatically at 2:00 AM UTC (7:30 AM IST) every day
+    - cron: '0 2 * * *' 
+  workflow_dispatch: # Allows you to trigger it manually from GitHub
+
+jobs:
+  scrape-and-load:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 pandas python-dotenv snowflake-connector-python[pandas] psycopg2-binary sqlalchemy
+          
+      - name: Run ETL Pipeline
+        env:
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          NEON_DB_URL: ${{ secrets.NEON_DB_URL }}
+        run: python etl_pipeline.py
