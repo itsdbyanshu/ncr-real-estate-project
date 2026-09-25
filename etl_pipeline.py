@@ -47,9 +47,11 @@ def main():
     # ==========================================
     for city in NCR_CITIES:
         print(f"\n=== Fetching Data for {city} ===")
+        clean_city = city.replace('-', ' ').title()
         
         page = 1
-        while page<=5:
+        # Unrestricted loop for full historical backfill
+        while True:
             print(f"Scraping {city} - Page {page}...")
             url = f"https://www.magicbricks.com/property-for-rent/residential-real-estate?bedroom=1,2,3&proptype=Multistorey-Apartment,Builder-Floor-Apartment,Penthouse,Studio-Apartment,Service-Apartment,Residential-House,Villa&cityName={city}&page={page}"
             
@@ -69,11 +71,25 @@ def main():
                 break
             
             for listing in listings:
+                # Core Text Fields
                 title_elem = listing.find('h2')
                 title = title_elem.text.strip() if title_elem else "N/A"
                 
                 price_elem = listing.find('div', class_='mb-srp__card__price--amount')
                 raw_price = price_elem.text.strip() if price_elem else "0"
+                
+                # URL Extraction
+                url_elem = listing.find('a', href=True)
+                property_url = url_elem['href'] if url_elem else "No URL found"
+                if property_url.startswith('/'):
+                    property_url = "https://www.magicbricks.com" + property_url
+                
+                # Categorical Extraction
+                type_keywords = ['Apartment', 'Builder Floor', 'Villa', 'Independent House', 'Penthouse', 'Studio']
+                property_type = next((t for t in type_keywords if t.lower() in title.lower()), 'Other')
+                
+                furnishing_keywords = ['Fully Furnished', 'Semi-Furnished', 'Unfurnished']
+                furnishing_status = next((f for f in furnishing_keywords if f.lower() in listing.text.lower()), 'Unspecified')
                 
                 all_properties.append({
                     "TITLE": title,
@@ -81,20 +97,25 @@ def main():
                     "SQFT": extract_sqft(listing),
                     "BHK": int(title.split(' ')[0]) if title and title[0].isdigit() else None,
                     "SECTOR": title.split(' in ')[-1] if title and ' in ' in title else None,
+                    "CITY": clean_city,
+                    "PROPERTY_URL": property_url,
+                    "PROPERTY_TYPE": property_type,
+                    "FURNISHING_STATUS": furnishing_status,
                     "SCRAPED_AT": datetime.now()
                 })
                 
             # Random delay to mimic human browsing
             time.sleep(random.uniform(2, 5))
-            
-            # Manually increment the page number to fetch the next page on the next loop
             page += 1 
             
     # ==========================================
     # 2. TRANSFORM
     # ==========================================
     df = pd.DataFrame(all_properties)
+    
+    # Drop invalid rows and prevent division by zero
     df = df.dropna(subset=['RENT_PRICE', 'SQFT'])
+    df = df[df['SQFT'] > 0]
     df['PRICE_PER_SQFT'] = (df['RENT_PRICE'] / df['SQFT']).round(2)
     
     print(f"\nExtracted, cleaned, and transformed {len(df)} properties across NCR.")
@@ -111,7 +132,7 @@ def main():
             database=os.getenv("SNOWFLAKE_DATABASE"),
             schema=os.getenv("SNOWFLAKE_SCHEMA")
         )
-        # Convert columns to uppercase for Snowflake
+        # Convert columns to uppercase for Snowflake standard
         df.columns = [c.upper() for c in df.columns] 
         write_pandas(conn, df, 'RENTAL_LISTINGS', auto_create_table=False, overwrite=False)
         print("✅ Successfully appended data to Snowflake!")
@@ -125,7 +146,7 @@ def main():
     try:
         neon_url = os.getenv("NEON_DB_URL").replace("postgres://", "postgresql://")
         engine = create_engine(neon_url)
-        # Convert columns to lowercase for Neon PostgreSQL
+        # Convert columns to lowercase for PostgreSQL standard
         df.columns = [c.lower() for c in df.columns]
         df.to_sql('rental_listings', engine, if_exists='append', index=False)
         print("✅ Successfully appended data to Neon!")
