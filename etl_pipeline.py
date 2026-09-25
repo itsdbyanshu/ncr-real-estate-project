@@ -43,7 +43,7 @@ def main():
     all_properties = []
     
     # ==========================================
-    # 1. EXTRACT (Infinite Loop per City)
+    # 1. EXTRACT (Infinite Loop per City)  || ONCE POPULATED , THEN CHANGING TO PAGE <= 5 FOR DAILY UPDATES 
     # ==========================================
     for city in NCR_CITIES:
         print(f"\n=== Fetching Data for {city} ===")
@@ -51,12 +51,14 @@ def main():
         
         page = 1
         # Unrestricted loop for full historical backfill
-        while True:
+        #while True:
+        # Restricting to first 5 pages for daily updates
+        while page <= 5:
             print(f"Scraping {city} - Page {page}...")
             url = f"https://www.magicbricks.com/property-for-rent/residential-real-estate?bedroom=1,2,3&proptype=Multistorey-Apartment,Builder-Floor-Apartment,Penthouse,Studio-Apartment,Service-Apartment,Residential-House,Villa&cityName={city}&page={page}"
             
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers , timeout=10)
             
             if response.status_code != 200:
                 print(f"Failed on {city} page {page}. Status: {response.status_code}")

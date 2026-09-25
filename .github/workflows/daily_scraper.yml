@@ -32,4 +32,4 @@ jobs:
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
           NEON_DB_URL: ${{ secrets.NEON_DB_URL }}
-        run: python etl_pipeline.py
+        run: python -u etl_pipeline.py
