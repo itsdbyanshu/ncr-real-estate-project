@@ -63,6 +63,14 @@ except Exception as e:
 
 
 print("\n=== STEP 3: Chat Loop ===")
+
+# --- STREAMLIT BRIDGE FUNCTION ---
+def run_agent(user_query):
+    """Bridge function to allow Streamlit to query the LangChain agent."""
+    response = agent_executor.invoke({"input": user_query})
+    return response["output"]
+# ---------------------------------------
+
 if __name__ == "__main__":
     print("Type 'exit' or 'q' to stop.\n")
     while True:
@@ -76,8 +84,9 @@ if __name__ == "__main__":
             
         print("\n--- Agent Running ---")
         try:
-            response = agent_executor.invoke({"input": user_query})
-            print("\nFINAL ANSWER:\n", response["output"])
+            # We can now use our new function here too!
+            answer = run_agent(user_query)
+            print("\nFINAL ANSWER:\n", answer)
         except Exception as e:
             print("\nError executing query:", e)
         print("-" * 50)
