@@ -1,92 +1,36 @@
 import os
-from dotenv import load_dotenv
+import streamlit as st
 from langchain_community.utilities import SQLDatabase
 from langchain_groq import ChatGroq
-from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
-from langchain_community.agent_toolkits import create_sql_agent
+from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain.agents import create_sql_agent
 
-load_dotenv()
+# 1. Securely load credentials from Streamlit Cloud Secrets
+# (This acts as a bridge so LangChain can find the Groq API key automatically)
+os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+NEON_DB_URL = st.secrets["NEON_DB_URL"]
 
-print("\n=== STEP 1: Testing Connections ===")
-
-# 1. Connect to Neon Database
-try:
-    neon_url = os.getenv("NEON_DB_URL").replace("postgres://", "postgresql://")
-    db = SQLDatabase.from_uri(neon_url)
-    print("✓ Database Connected! Usable Tables:", db.get_usable_table_names())
-except Exception as e:
-    print("❌ Database Connection Failed:", e)
-
-# 2. Initialize Groq LLM
-try:
+def run_agent(user_prompt):
+    # 2. Initialize Database Connection
+    db = SQLDatabase.from_uri(NEON_DB_URL)
+    
+    # 3. Initialize the LLM (Update the model name if you used a different one)
     llm = ChatGroq(
-        groq_api_key=os.getenv("GROQ_API_KEY"),
-        model_name="openai/gpt-oss-120b",
+        model_name="llama3-70b-8192", 
         temperature=0
     )
-    print("✓ Groq LLM Initialized!")
-except Exception as e:
-    print("❌ Groq LLM Failed:", e)
-
-print("\n=== STEP 2: Building the Agent ===")
-
-# 3. Create the Database Toolkit
-toolkit = SQLDatabaseToolkit(db=db, llm=llm)
-
-# 4. Set our strict Real Estate Guardrails
-custom_instructions = """You are an expert Real Estate Data Analyst AI for the National Capital Region (NCR) of India.
-Your strictly defined job is to answer user questions by writing and executing PostgreSQL queries against the 'rental_listings' table.
-
-GUARDRAIL: 
-- You must ONLY answer questions using data retrieved from the 'rental_listings' table. 
-- Refuse general questions, coding questions, or non-real estate questions politely.
-
-SCHEMA RULES:
-- `bhk` represents bedrooms.
-- Always use ILIKE for text matching to avoid case sensitivity (e.g., city ILIKE 'noida').
-- ALWAYS use LIMIT 10 on large results unless asked otherwise.
-- Only execute SELECT queries. NEVER DML operations.
-"""
-
-# 5. Initialize the standard, stable SQL Agent
-try:
+    
+    # 4. Bind the Toolkit (This must happen AFTER db and llm are defined)
+    toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+    
+    # 5. Create and Execute the Agent
     agent_executor = create_sql_agent(
         llm=llm,
         toolkit=toolkit,
         verbose=True,
-        prefix=custom_instructions,
-        agent_type="tool-calling"
+        handle_parsing_errors=True
     )
-    print("✓ SQL Agent Built Successfully!")
-except Exception as e:
-    print("❌ Agent Build Failed:", e)
-
-
-print("\n=== STEP 3: Chat Loop ===")
-
-# --- STREAMLIT BRIDGE FUNCTION ---
-def run_agent(user_query):
-    """Bridge function to allow Streamlit to query the LangChain agent."""
-    response = agent_executor.invoke({"input": user_query})
+    
+    # 6. Run the query and return the response
+    response = agent_executor.invoke({"input": user_prompt})
     return response["output"]
-# ---------------------------------------
-
-if __name__ == "__main__":
-    print("Type 'exit' or 'q' to stop.\n")
-    while True:
-        user_query = input("Ask a question about NCR rentals: ").strip()
-        
-        if user_query.lower() in ["exit", "quit", "q"]:
-            print("Session ended.")
-            break
-        if not user_query:
-            continue
-            
-        print("\n--- Agent Running ---")
-        try:
-            # We can now use our new function here too!
-            answer = run_agent(user_query)
-            print("\nFINAL ANSWER:\n", answer)
-        except Exception as e:
-            print("\nError executing query:", e)
-        print("-" * 50)
